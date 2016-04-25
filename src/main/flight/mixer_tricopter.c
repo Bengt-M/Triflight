@@ -184,8 +184,6 @@ static int16_t tailMotorDecelerationDelay_angle;
 static servoParam_t * gpTailServoConf;
 static int16_t *gpTailServo;
 static mixerConfig_t *gpMixerConfig;
-static uint8_t currentIYaw;
-static float currentIYawf;
 
 static uint16_t tailServoADC = 0;
 static AdcChannel tailServoADCChannel = ADC_EXTERNAL1;
@@ -498,6 +496,9 @@ static void triTailTuneStep(servoParam_t *pServoConf, int16_t *pServoVal)
 
 static void tailTuneModeThrustTorque(struct thrustTorque_t *pTT, const bool isThrottleHigh)
 {
+    static uint8_t currentIYaw;
+    static float currentIYawf;
+
     switch(pTT->state)
     {
     case TT_IDLE:
@@ -517,7 +518,7 @@ static void tailTuneModeThrustTorque(struct thrustTorque_t *pTT, const bool isTh
             currentIYawf = currentProfile->pidProfile.I_f[FD_YAW];
             currentProfile->pidProfile.I8[FD_YAW] = 0;
             currentProfile->pidProfile.I_f[FD_YAW] = 0.0f;
-            pidResetErrorGyroYaw();
+            pidResetErrorGyroAxis(FD_YAW);
         }
         break;
     case TT_WAIT:
