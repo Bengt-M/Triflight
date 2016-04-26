@@ -85,11 +85,6 @@
 #define TRI_YAW_FORCE_CURVE_SIZE (100)
 #define TRI_TAIL_SERVO_MAX_ANGLE (500)
 
-#define SERVO_CALIB_NUM_OF_MEAS  (5)
-
-#define TT_CALIB_I_TARGET       (8)
-#define TT_CALIB_I_LARGE_INCREMENT_LIMIT (10)
-
 #define IsDelayElapsed_us(timestamp_us, delay_us) ((uint32_t)(micros() - timestamp_us) >= delay_us)
 #define IsDelayElapsed_ms(timestamp_ms, delay_ms) ((uint32_t)(millis() - timestamp_ms) >= delay_ms)
 
@@ -128,6 +123,8 @@ typedef enum {
 
 typedef struct tailTune_s {
     tailtuneMode_e mode;
+    uint8_t userIYaw;
+    float userIYawf;
     struct thrustTorque_t
     {
         tailTuneState_e state;
@@ -415,7 +412,7 @@ static uint16_t getPitchCorrectionMaxPhaseShift(int16_t servoAngle,
 
 static uint16_t virtualServoStep(uint16_t currentAngle, int16_t servoSpeed, float dT, servoParam_t *servoConf, uint16_t servoValue)
 {
-    const uint16_t angleSetPoint = getServoAngle(servoConf, servoValue) / 10.0f;
+    const uint16_t angleSetPoint = getServoAngle(servoConf, servoValue);
     const uint16_t dA = dT * servoSpeed * 10; // Max change of an angle since last check
 
     if ( ABS(currentAngle - angleSetPoint) < dA )
@@ -455,6 +452,9 @@ static void triTailTuneStep(servoParam_t *pServoConf, int16_t *pServoVal)
             DISABLE_ARMING_FLAG(PREVENT_ARMING);
             DISABLE_FLIGHT_MODE(TAILTUNE_MODE);
             tailTune.mode = TT_MODE_NONE;
+            // Set the I parameters back to the user settings
+            currentProfile->pidProfile.I8[FD_YAW] = tailTune.userIYaw;
+            currentProfile->pidProfile.I_f[FD_YAW] = tailTune.userIYawf;
         }
         return;
     }
@@ -496,9 +496,6 @@ static void triTailTuneStep(servoParam_t *pServoConf, int16_t *pServoVal)
 
 static void tailTuneModeThrustTorque(struct thrustTorque_t *pTT, const bool isThrottleHigh)
 {
-    static uint8_t currentIYaw;
-    static float currentIYawf;
-
     switch(pTT->state)
     {
     case TT_IDLE:
@@ -514,8 +511,8 @@ static void tailTuneModeThrustTorque(struct thrustTorque_t *pTT, const bool isTh
             pTT->servoAvgAngle.numOf = 0;
 
             // reset the I term for yaw. If the bench tail tune was bad we should notice a short yaw twist
-            currentIYaw = currentProfile->pidProfile.I8[FD_YAW];
-            currentIYawf = currentProfile->pidProfile.I_f[FD_YAW];
+            tailTune.userIYaw = currentProfile->pidProfile.I8[FD_YAW];
+            tailTune.userIYawf = currentProfile->pidProfile.I_f[FD_YAW];
             currentProfile->pidProfile.I8[FD_YAW] = 0;
             currentProfile->pidProfile.I_f[FD_YAW] = 0.0f;
             pidResetErrorGyroAxis(FD_YAW);
@@ -539,8 +536,8 @@ static void tailTuneModeThrustTorque(struct thrustTorque_t *pTT, const bool isTh
                 beeper(BEEPER_BAT_LOW);
                 pTT->startBeepDelay_ms += 1000;
                 // Set the I parameters back to the user settings
-                currentProfile->pidProfile.I8[FD_YAW] = currentIYaw;
-                currentProfile->pidProfile.I_f[FD_YAW] = currentIYawf;
+                currentProfile->pidProfile.I8[FD_YAW] = tailTune.userIYaw;
+                currentProfile->pidProfile.I_f[FD_YAW] = tailTune.userIYawf;
             }
         }
         else
@@ -553,7 +550,7 @@ static void tailTuneModeThrustTorque(struct thrustTorque_t *pTT, const bool isTh
             isRcAxisWithinDeadband(ROLL) &&
             isRcAxisWithinDeadband(PITCH) &&
             isRcAxisWithinDeadband(YAW) &&
-            (fabsf(gyroADC[FD_YAW] * gyro.scale) <= 4.0f))
+            (fabsf(gyroADC[FD_YAW] * gyro.scale) <= 4.0f)) // deg/s
         {
             if (IsDelayElapsed_ms(pTT->timestamp_ms, 250))
             {
