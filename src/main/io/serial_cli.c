@@ -2490,7 +2490,7 @@ static void cliVersion(char *cmdline)
 {
     UNUSED(cmdline);
 
-    cliPrintf("# TriFlight 0.5 Beta 2/%s %s %s / %s (%s)",
+    cliPrintf("# TriFlight 0.5 Beta 2BM4/%s %s %s / %s (%s)",
         targetName,
         FC_VERSION_STRING,
         buildDate,
